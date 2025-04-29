@@ -1,0 +1,65 @@
+services:
+  postgres:
+    image: postgres:15
+    container_name: wallet_postgres
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: 'cris$#2260'
+      POSTGRES_DB: wallet_db
+    ports:
+      - '5432:5432'
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./backend/init-multiple-db.sql:/docker-entrypoint-initdb.d/init-multiple-db.sql
+    networks:
+      - wallet_network
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U postgres -d wallet_db']
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: wallet_backend
+    env_file:
+      - ./backend/.env
+    environment:
+      - NODE_ENV=development
+    ports:
+      - '3000:3000'
+    volumes:
+      - ./backend:/app
+      - /app/node_modules
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - wallet_network
+    command: sh -c "sleep 5 && npm run start:dev"
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: wallet_frontend
+    environment:
+      - NEXT_PUBLIC_API_URL=http://backend:3000
+      - NODE_ENV=production
+    depends_on:
+      - backend
+    ports:
+      - "3001:3001"
+    networks:
+      - wallet_network
+
+volumes:
+  postgres_data:
+    name: wallet_postgres_data
+
+networks:
+  wallet_network:
+    name: wallet_network
+    driver: bridge
